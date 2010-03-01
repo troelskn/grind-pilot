@@ -1,0 +1,144 @@
+#!/usr/bin/php
+<?php
+function parse($inFile) {
+  $in = @fopen($inFile === '-' ? 'php://stdin' : $inFile, 'rb');
+  if (!$in) {
+    throw new Exception('Could not open '.$inFile.' for reading.');
+  }
+  // Read information into memory
+  while ($line = fgets($in)) {
+    if (substr($line, 0, 3) === 'fl=') {
+      // Found invocation of function. Read functionname
+      list($function) = fscanf($in, "fn=%[^\n\r]s");
+      $filename = substr(trim($line), 3);
+      // Special case for ENTRY_POINT - it contains summary header
+      if ('{main}' === $function) {
+        fgets($in);
+        $headers[] = fgets($in);
+        fgets($in);
+      }
+      // Cost line
+      list($line_no, $time) = fscanf($in, "%d %d");
+      handle_def($function, $filename, $line_no, $time);
+    } elseif (substr($line, 0, 4) === 'cfn=') {
+      // TODO: cfl= "call file"
+      // Found call to function. ($function should contain function call originates from)
+      $function = substr(trim($line), 4);
+      // Skip call line
+      fgets($in);
+      // Cost line
+      list($line_no, $time) = fscanf($in, "%d %d");
+      handle_call($function, $line_no, $time);
+    } elseif (strpos($line, ': ') !== false) {
+      handle_header($line);
+    }
+  }
+}
+
+$buffer = array();
+function pop_from_buffer($function) {
+  global $buffer;
+  foreach ($buffer as $index => $def) {
+    if ($def['function'] === $function) { // 0 => $function
+      unset($buffer[$index]);
+      $buffer = array_merge(array(), $buffer);
+      return $def;
+    }
+  }
+}
+
+function handle_def($function, $filename, $line_no, $time) {
+  global $buffer;
+  $buffer[] = array(
+    'function' => $function,
+    'filename' => $filename,
+    'line_no' => $line_no,
+    'time_self' => $time,
+    'time_total' => $time,
+    'children' => array());
+}
+
+function handle_call($function, $line_no, $time) {
+  global $buffer;
+  $def = pop_from_buffer($function);
+  $current = count($buffer) - 1;
+  $def['called_from'] = $buffer[$current]['filename'];
+  $buffer[$current]['time_total'] += $def['time_total'];
+  $buffer[$current]['children'][] = $def;
+}
+
+function handle_header($header) {}
+
+$show_filename = true;
+function format_line($data, $level) {
+  global $show_filename;
+  $s = str_pad(number_format($data['time_total'] / 1000, 4, ".", ""), 9, ' ', STR_PAD_LEFT)
+    . " " . str_pad(number_format($data['time_self'] / 1000, 4, ".", ""), 9, ' ', STR_PAD_LEFT)
+    . $level
+    . " " . $data['function'];
+  if ($show_filename) {
+    if ($data['called_from']) {
+      $s .= "\n" . $level . "                    called from ["
+        . $data['called_from'] . ":" . $data['line_no'] . "]";
+    } else {
+      $s .= "\n";
+      //$s .= "   [" . $data['filename'] . ":" . $data['line_no'] . "]";
+    }
+  }
+  return $s;
+}
+
+function format_line_short($data, $index, $level) {
+  return
+    str_pad(number_format($data['time_total'] / 1000, 4, ".", ""), 9, ' ', STR_PAD_LEFT)
+    . " " . str_pad(number_format($data['time_self'] / 1000, 4, ".", ""), 9, ' ', STR_PAD_LEFT)
+    . $level
+    . str_pad($index . ".", 5, ' ', STR_PAD_LEFT)
+    . " " . $data['function'];
+}
+
+function traverse_and_print($root, $path) {
+  echo "Total     Self      Callstack\n";
+
+  $level = "";
+  foreach ($path as $index) {
+    echo format_line($root, $level), "\n";
+    if (!isset($root['children'][$index])) {
+      throw new Exception("No such index");
+    }
+    $root = $root['children'][$index];
+    $level .= "  ";
+  }
+
+  echo format_line($root, $level), "\n";
+
+  if (isset($root['children'])) {
+    echo "\n";
+    echo "[", $root['filename'], "]\n";
+    foreach ($root['children'] as $index => $child) {
+      echo format_line_short($child, $index, $level), "\n";
+    }
+  }
+}
+// main:
+if (empty($_SERVER['argv'][1])) {
+  throw new Exception("Missing filename");
+}
+
+if ($_SERVER['argv'][1] === '--help') {
+  echo "USAGE: grind-browse FILENAME [PATH]\n";
+  echo "  FILENAME  Name of cachegrind file. Use - for stdin.\n";
+  echo "  PATH      Zero or more numbers, separated by spaces.\n";
+  exit;
+}
+
+parse($_SERVER['argv'][1]);
+
+$path = $_SERVER['argv'];
+array_shift($path);
+array_shift($path);
+
+$root = $buffer[0];
+traverse_and_print($root, $path);
+
+
