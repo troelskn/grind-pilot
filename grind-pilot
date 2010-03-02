@@ -179,7 +179,7 @@ if (empty($_SERVER['argv'][1])) {
 }
 
 if ($_SERVER['argv'][1] === '--help') {
-  echo "USAGE: grind-browse FILENAME [PATH|avg|sum]\n";
+  echo "USAGE: grind-pilot FILENAME [PATH|avg|sum]\n";
   echo "  FILENAME  Name of cachegrind file. Use - for stdin.\n";
   echo "  PATH      Zero or more numbers, separated by spaces.\n";
   echo "  avg       Show index of 25 most expensive files, on average.\n";
