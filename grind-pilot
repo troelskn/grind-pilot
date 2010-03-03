@@ -69,6 +69,30 @@ function handle_call($function, $line_no, $time) {
 
 function handle_header($header) {}
 
+$callees = array();
+function find_callees($root, $target, $path = '') {
+  global $callees;
+  $id = 0;
+  foreach ($root['children'] as $child) {
+    if ($child['function'] === $target) {
+      $root['path'] = $path;
+      $callees[] = $root;
+    }
+    find_callees($child, $target, $path . ' '. $id);
+    ++$id;
+  }
+}
+
+function print_calles($root, $target) {
+  global $callees;
+  echo "Sum       Avg.      Callees for [$target]\n";
+  find_callees($root, $target);
+  foreach ($callees as $data) {
+    echo format_line($data, ""), "\n";
+    echo "                    ", "path: ", $data['path'], "\n";
+  }
+}
+
 $summary = array();
 function summarise($root) {
   global $summary;
@@ -153,7 +177,7 @@ function traverse_and_print($root, $path) {
   foreach ($path as $index) {
     echo format_line($root, $level), "\n";
     if (!isset($root['children'][$index])) {
-      throw new Exception("No such index");
+      throw new Exception("No such index '$index'");
     }
     $root = $root['children'][$index];
     $level .= "  ";
@@ -171,16 +195,21 @@ function traverse_and_print($root, $path) {
     }
   }
 }
+
 // main:
 $arguments = array();
 foreach (array_slice($_SERVER['argv'], 1) as $arg) {
   if (preg_match('/^--(.+)/', $arg)) {
     if ($arg === '--help') {
-      echo "USAGE: grind-pilot [OPTIONS] FILENAME [PATH|avg|sum]\n";
+      echo "USAGE: grind-pilot COMMAND [OPTIONS] FILENAME [FUNCTION|PATH]\n";
       echo "  FILENAME  Name of cachegrind file. Use - for stdin.\n";
-      echo "  PATH      Zero or more numbers, separated by spaces.\n";
+      echo "  PATH      Zero or more numbers, separated by spaces. Only valid for COMMAND=trace.\n";
+      echo "  FUNCTION  Name of function. Only valid for COMMAND=callee.\n";
+      echo "COMMAND:\n";
+      echo "  trace     Show callstack. Use PATH to navigate.\n";
       echo "  avg       Show index of 25 most expensive files, on average.\n";
       echo "  sum       Show index of 25 most expensive files, in total.\n";
+      echo "  callee    Show callees for a function.\n";
       echo "OPTIONS:\n";
       echo "  --help        Show this text.\n";
       echo "  --filename    Display filename/lineno in callstack.\n";
@@ -193,17 +222,25 @@ foreach (array_slice($_SERVER['argv'], 1) as $arg) {
   }
 }
 if (empty($arguments[0])) {
+  throw new Exception("Missing command");
+}
+$command = array_shift($arguments);
+if (!in_array($command, array('trace', 'sum', 'avg', 'callee'))) {
+  throw new Exception("Unknown command $command");
+}
+if (empty($arguments[0])) {
   throw new Exception("Missing filename");
 }
+$filename = array_shift($arguments);
 
-parse($arguments[0]);
+parse($filename);
 $root = $buffer[0];
 
-if (in_array($arguments[1], array('sum', 'avg'))) {
-  list_summary($root, $arguments[1]);
-} else {
-  $path = $arguments;
-  array_shift($path);
-  traverse_and_print($root, $path);
+if (in_array($command, array('sum', 'avg'))) {
+  list_summary($root, $command);
+} elseif ($command === 'trace') {
+  traverse_and_print($root, $arguments);
+} elseif ($command === 'callee') {
+  print_calles($root, $arguments[0]);
 }
 
