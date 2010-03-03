@@ -24,8 +24,7 @@ Examples:
 
     Inclusive Self      Callstack
        0.1250    0.0570 {main}
-
-    [/tmp/foo.php]
+    --------------------------------------------------
        0.0430    0.0390   0. foo
        0.0250    0.0250   1. foo
 
@@ -35,11 +34,21 @@ Examples:
 
     Inclusive Self      Callstack
        0.1250    0.0570 {main}
+       0.0430    0.0390   foo
+    --------------------------------------------------
+       0.0040    0.0040     0. php::chr
+       0.0000    0.0000     1. php::chr
 
+###Show filenames and line numbers
+
+    grind-pilot cachegrind.out.30394 0 --filename
+
+    Inclusive Self      Callstack
+       0.1250    0.0570 {main}
        0.0430    0.0390   foo
                           called from [/tmp/foo.php:6]
-
-    [/tmp/foo.php]
+    --------------------------------------------------
+    [/tmp/foo.php:3]
        0.0040    0.0040     0. php::chr
        0.0000    0.0000     1. php::chr
 

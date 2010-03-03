@@ -122,21 +122,16 @@ function list_summary($root, $sort_by = 'avg') {
   }
 }
 
-$show_filename = true;
+$show_filename = false;
 function format_line($data, $level) {
   global $show_filename;
   $s = str_pad(number_format($data['time_inclusive'] / 1000, 4, ".", ""), 9, ' ', STR_PAD_LEFT)
     . " " . str_pad(number_format($data['time_self'] / 1000, 4, ".", ""), 9, ' ', STR_PAD_LEFT)
     . $level
     . " " . $data['function'];
-  if ($show_filename) {
-    if ($data['called_from']) {
-      $s .= "\n" . $level . "                    called from ["
-        . $data['called_from'] . ":" . $data['line_no'] . "]";
-    } else {
-      $s .= "\n";
-      //$s .= "   [" . $data['filename'] . ":" . $data['line_no'] . "]";
-    }
+  if ($show_filename && $data['called_from']) {
+    $s .= "\n" . $level . "                    called from ["
+      . $data['called_from'] . ":" . $data['line_no'] . "]";
   }
   return $s;
 }
@@ -151,6 +146,7 @@ function format_line_short($data, $index, $level) {
 }
 
 function traverse_and_print($root, $path) {
+  global $show_filename;
   echo "Inclusive Self      Callstack\n";
 
   $level = "";
@@ -166,35 +162,47 @@ function traverse_and_print($root, $path) {
   echo format_line($root, $level), "\n";
 
   if (isset($root['children'])) {
-    echo "\n";
-    echo "[", $root['filename'], "]\n";
+    echo "--------------------------------------------------\n";
+    if ($show_filename) {
+      echo "[", $root['filename'], ":", $root['children'][0]['line_no'], "]\n";
+    }
     foreach ($root['children'] as $index => $child) {
       echo format_line_short($child, $index, $level), "\n";
     }
   }
 }
 // main:
-if (empty($_SERVER['argv'][1])) {
+$arguments = array();
+foreach (array_slice($_SERVER['argv'], 1) as $arg) {
+  if (preg_match('/^--(.+)/', $arg)) {
+    if ($arg === '--help') {
+      echo "USAGE: grind-pilot [OPTIONS] FILENAME [PATH|avg|sum]\n";
+      echo "  FILENAME  Name of cachegrind file. Use - for stdin.\n";
+      echo "  PATH      Zero or more numbers, separated by spaces.\n";
+      echo "  avg       Show index of 25 most expensive files, on average.\n";
+      echo "  sum       Show index of 25 most expensive files, in total.\n";
+      echo "OPTIONS:\n";
+      echo "  --help        Show this text.\n";
+      echo "  --filename    Display filename/lineno in callstack.\n";
+      exit;
+    } elseif (in_array($arg, array('--show-filename', '--filename'))) {
+      $show_filename = true;
+    }
+  } else {
+    $arguments[] = $arg;
+  }
+}
+if (empty($arguments[0])) {
   throw new Exception("Missing filename");
 }
 
-if ($_SERVER['argv'][1] === '--help') {
-  echo "USAGE: grind-pilot FILENAME [PATH|avg|sum]\n";
-  echo "  FILENAME  Name of cachegrind file. Use - for stdin.\n";
-  echo "  PATH      Zero or more numbers, separated by spaces.\n";
-  echo "  avg       Show index of 25 most expensive files, on average.\n";
-  echo "  sum       Show index of 25 most expensive files, in total.\n";
-  exit;
-}
-
-parse($_SERVER['argv'][1]);
+parse($arguments[0]);
 $root = $buffer[0];
 
-if (in_array($_SERVER['argv'][2], array('sum', 'avg'))) {
-  list_summary($root, $_SERVER['argv'][2]);
+if (in_array($arguments[1], array('sum', 'avg'))) {
+  list_summary($root, $arguments[1]);
 } else {
-  $path = $_SERVER['argv'];
-  array_shift($path);
+  $path = $arguments;
   array_shift($path);
   traverse_and_print($root, $path);
 }
