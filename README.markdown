@@ -11,7 +11,7 @@ Examples:
 
 ###Show index by avg. cost
 
-    grind-pilot cachegrind.out.30394 avg
+    grind-pilot avg cachegrind.out.30394
 
     Sum       Avg.      Calls Function
        0.0570    0.0570     1 {main}
@@ -20,7 +20,7 @@ Examples:
 
 ###Show top level callstack
 
-    grind-pilot cachegrind.out.30394
+    grind-pilot trace cachegrind.out.30394
 
     Inclusive Self      Callstack
        0.1250    0.0570 {main}
@@ -30,7 +30,18 @@ Examples:
 
 ###Show one level down through the callstack
 
-    grind-pilot cachegrind.out.30394 0
+    grind-pilot trace cachegrind.out.30394 0
+
+    Inclusive Self      Callstack
+       0.1250    0.0570 {main}
+       0.0430    0.0390   foo
+    --------------------------------------------------
+       0.0040    0.0040     0. php::chr
+       0.0000    0.0000     1. php::chr
+
+###Show slowest level down through the callstack
+
+    grind-pilot trace cachegrind.out.30394 auto
 
     Inclusive Self      Callstack
        0.1250    0.0570 {main}
@@ -41,7 +52,7 @@ Examples:
 
 ###Show filenames and line numbers
 
-    grind-pilot cachegrind.out.30394 0 --filename
+    grind-pilot trace cachegrind.out.30394 0 --filename
 
     Inclusive Self      Callstack
        0.1250    0.0570 {main}

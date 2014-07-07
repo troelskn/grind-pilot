@@ -153,7 +153,7 @@ function format_line($data, $level) {
     . " " . str_pad(number_format($data['time_self'] / 1000, 4, ".", ""), 9, ' ', STR_PAD_LEFT)
     . $level
     . " " . $data['function'];
-  if ($show_filename && $data['called_from']) {
+  if ($show_filename && isset($data['called_from'])) {
     $s .= "\n" . $level . "                    called from ["
       . $data['called_from'] . ":" . $data['line_no'] . "]";
   }
@@ -167,6 +167,25 @@ function format_line_short($data, $index, $level) {
     . $level
     . str_pad($index . ".", 5, ' ', STR_PAD_LEFT)
     . " " . $data['function'];
+}
+
+function find_slowest_path($root, $path = array()) {
+    $time = 0;
+    $index = 0;
+
+    if (empty($root['children'])) {
+        return $path;
+    }
+
+    foreach ($root['children'] as $i => $child) {
+        if ($child['time_inclusive'] > $time) {
+            $time = $child['time_inclusive'];
+            $index = $i;
+        }
+    }
+
+    $path[] = $index;
+    return find_slowest_path($root['children'][$index], $path);
 }
 
 function traverse_and_print($root, $path) {
@@ -187,7 +206,9 @@ function traverse_and_print($root, $path) {
 
   if (isset($root['children'])) {
     echo "--------------------------------------------------\n";
-    if ($show_filename) {
+    if (empty($root['children'])) {
+        echo ' No children found.', "\n";
+    } else if ($show_filename) {
       echo "[", $root['filename'], ":", $root['children'][0]['line_no'], "]\n";
     }
     foreach ($root['children'] as $index => $child) {
@@ -239,7 +260,11 @@ $root = $buffer[0];
 if (in_array($command, array('sum', 'avg'))) {
   list_summary($root, $command);
 } elseif ($command === 'trace') {
-  traverse_and_print($root, $arguments);
+  $path = $arguments;
+  if ($path[0] == 'auto') {
+    $path = find_slowest_path($root);
+  }
+  traverse_and_print($root, $path);
 } elseif ($command === 'callee') {
   print_calles($root, $arguments[0]);
 }
